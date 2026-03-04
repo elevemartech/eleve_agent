@@ -73,9 +73,9 @@ async def meta_verify(request: Request):
 @app.post("/webhook")
 async def webhook(request: Request, background_tasks: BackgroundTasks):
     payload = await request.json()
+    logger.info("webhook_payload", payload=payload)  # ← adiciona essa linha
     background_tasks.add_task(handle_message, payload)
     return {"status": "received"}
-
 
 async def handle_message(payload: dict) -> None:
     """Processa mensagem recebida do WhatsApp em background."""
