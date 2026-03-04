@@ -83,7 +83,8 @@ async def handle_message(payload: dict) -> None:
     # 1. Identifica escola pelo token da instância
     # Tenta UazAPI primeiro, depois Meta
     instance_token = (
-        payload.get("instance")
+        payload.get("token")         
+        or payload.get("instance")
         or payload.get("instanceId")
         or _extract_meta_phone_number_id(payload)
     )

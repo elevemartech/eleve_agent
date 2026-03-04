@@ -22,49 +22,43 @@ class UazAPIProvider(WhatsAppProvider):
             resp.raise_for_status()
 
     def extract_phone(self, payload: dict) -> str | None:
-        sender = payload.get("sender") or payload.get("from") or ""
+        msg = payload.get("message", {})
+        # sender_pn é o número real do usuário (ex: 5521974021620@s.whatsapp.net)
+        sender = msg.get("sender_pn") or msg.get("chatid") or ""
         return sender.split("@")[0] if "@" in sender else sender or None
 
     def extract_text(self, payload: dict) -> str | None:
         msg = payload.get("message", {})
-        return (
-            msg.get("conversation")
-            or msg.get("extendedTextMessage", {}).get("text")
-            or None
-        )
+        # UazAPI envia o texto normalizado diretamente em message.text
+        return msg.get("text") or None
 
     def extract_message_type(self, payload: dict) -> str:
         msg = payload.get("message", {})
-        if "conversation" in msg or "extendedTextMessage" in msg:
+        msg_type = msg.get("type", "")
+        media_type = msg.get("mediaType", "")
+
+        if msg_type == "text":
             return "text"
-        if "audioMessage" in msg:
-            return "audio"
-        if "pttMessage" in msg:
-            return "ptt"
-        if "imageMessage" in msg:
-            return "image"
-        if "documentMessage" in msg:
-            return "document"
-        if "stickerMessage" in msg:
-            return "sticker"
+        if media_type in ("audio", "ptt", "image", "document", "sticker"):
+            return media_type
+        if msg_type in ("audio", "ptt", "image", "document", "sticker"):
+            return msg_type
         return "unknown"
 
     def extract_media_url(self, payload: dict) -> str | None:
         msg = payload.get("message", {})
-        for key in ("audioMessage", "pttMessage", "imageMessage", "documentMessage"):
-            if key in msg:
-                return msg[key].get("url")
-        return None
+        return msg.get("mediaUrl") or None
 
     def extract_mime_type(self, payload: dict) -> str:
         msg = payload.get("message", {})
-        for key in ("audioMessage", "pttMessage", "imageMessage", "documentMessage"):
-            if key in msg:
-                return msg[key].get("mimetype", "")
-        return ""
+        return msg.get("mimetype", "")
 
     def extract_contact_name(self, payload: dict) -> str:
-        return payload.get("pushName") or payload.get("notifyName") or ""
+        chat = payload.get("chat", {})
+        msg = payload.get("message", {})
+        # chat.name é o nome salvo nos contatos; senderName como fallback
+        return chat.get("name") or msg.get("senderName") or ""
 
     def extract_instance_token(self, payload: dict) -> str | None:
-        return payload.get("instance") or payload.get("instanceId") or None
+        # UazAPI envia o token da instância no campo raiz "token"
+        return payload.get("token") or None
