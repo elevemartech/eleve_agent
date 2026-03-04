@@ -1,4 +1,22 @@
-"""Tool: Identifica responsável pelo número de telefone via SIGA."""
+# ===================================================================
+# tools/get_guardian_by_phone.py
+#
+# CORREÇÃO: endpoint atualizado de
+#   /api/v1/contacts/students/guardians/   ← não existe
+# para
+#   /api/v1/people/lookup-whatsapp/        ← endpoint real da API
+#
+# O endpoint lookup-whatsapp recebe ?phone=<numero> e retorna:
+# {
+#   "found": true,
+#   "guardian": { "id": "uuid", "name": "...", "phone": "..." },
+#   "students": [
+#     { "id": "uuid", "name": "...", "enrollment_number": "...",
+#       "current_class": "...", "siga_student_id": "...", "relationship": "..." }
+#   ]
+# }
+# ===================================================================
+
 import json
 from langchain_core.tools import tool
 from core.api_client import DjangoAPIClient
@@ -7,41 +25,43 @@ from core.api_client import DjangoAPIClient
 @tool
 async def get_guardian_by_phone(phone: str, sa_token: str, **kwargs) -> str:
     """
-    Identifica o responsável pelo telefone e retorna dados dos filhos.
+    Identifica o responsável pelo número de WhatsApp e retorna dados dos filhos matriculados.
     Retorna JSON com found, guardian_id, guardian_name e lista de alunos.
+    Use sempre no início do atendimento para personalizar a conversa.
     """
     client = DjangoAPIClient(token=sa_token)
 
-    # Remove caracteres não numéricos
+    # Normaliza: mantém apenas dígitos
     phone_digits = "".join(filter(str.isdigit, phone))
 
     try:
         result = await client.get(
-            "/api/v1/contacts/students/guardians/",
-            params={"search": phone_digits},
+            "/api/v1/people/lookup-whatsapp/",
+            params={"phone": phone_digits},
         )
-        guardians = result if isinstance(result, list) else result.get("results", [])
 
-        if not guardians:
+        # Resposta: {"found": bool, "guardian": {...}, "students": [...]}
+        if not result.get("found"):
             return json.dumps({
                 "found": False,
                 "message": "Responsável não encontrado no sistema.",
             }, ensure_ascii=False)
 
-        guardian = guardians[0]
+        guardian = result.get("guardian", {})
         students = []
-        for filho in guardian.get("filhos", []):
+        for s in result.get("students", []):
             students.append({
-                "id": str(filho.get("id", "")),
-                "name": filho.get("nome", ""),
-                "grade": filho.get("serie", ""),
-                "enrollment": filho.get("matricula", ""),
+                "id": str(s.get("id", "")),
+                "name": s.get("name", ""),
+                "grade": s.get("current_class", ""),
+                "enrollment": s.get("enrollment_number", ""),
+                "relationship": s.get("relationship", ""),
             })
 
         ctx = {
             "found": True,
             "guardian_id": str(guardian.get("id", "")),
-            "guardian_name": guardian.get("nome", guardian.get("name", "")),
+            "guardian_name": guardian.get("name", ""),
             "students": students,
         }
         return json.dumps(ctx, ensure_ascii=False)
