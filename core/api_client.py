@@ -17,7 +17,7 @@ class DjangoAPIClient:
     def __init__(self, token: str):
         self.base_url = settings.django_api_url.rstrip("/")
         self.headers = {
-            "Authorization": f"Token {token}",
+            "Authorization": f"ServiceKey {token}",
             "Content-Type": "application/json",
         }
 
