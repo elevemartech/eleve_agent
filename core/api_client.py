@@ -17,6 +17,8 @@ class DjangoAPIClient:
     def __init__(self, token: str):
         self.base_url = settings.django_api_url.rstrip("/")
         self.headers = {
+            # CORREÇÃO: A API usa ServiceAccountAuthentication com keyword='ServiceKey'.
+            # O header 'Token ...' é ignorado pelo backend e resulta em 401 em todas as chamadas.
             "Authorization": f"ServiceKey {token}",
             "Content-Type": "application/json",
         }
