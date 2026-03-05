@@ -6,10 +6,10 @@ Nunca negocia dívida — escala para humano.
 """
 from __future__ import annotations
 
+import json
 import structlog
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_core.tools import tool
 
 from agents.state import AgentState
 from core.settings import settings
@@ -49,25 +49,30 @@ async def financial_node(state: AgentState) -> AgentState:
             })
             tool_results.append(f"Identificação: {result}")
 
-            # Tenta parsear o contexto retornado
-            import json
             if isinstance(result, str) and "{" in result:
                 guardian_context = json.loads(result)
         except Exception as e:
             logger.warning("financial_identify_error", error=str(e))
             tool_results.append("Identificação: responsável não encontrado no sistema")
 
-    # 2. Busca boletos se tiver guardian_id
-    if guardian_context and guardian_context.get("found") and guardian_context.get("guardian_id"):
-        try:
-            invoices_result = await get_invoices.ainvoke({
-                "guardian_id": guardian_context["guardian_id"],
-                "sa_token": state["sa_token"],
-            })
-            tool_results.append(f"Boletos: {invoices_result}")
-        except Exception as e:
-            logger.warning("financial_invoices_error", error=str(e))
-            tool_results.append("Boletos: erro ao consultar — tente novamente em instantes")
+    # 2. Busca boletos se responsável foi identificado
+    if guardian_context and guardian_context.get("found"):
+        # CORREÇÃO: usa siga_guardian_id (inteiro do SIGA), não guardian_id (UUID).
+        # O endpoint GET /contacts/guardians/{id}/invoices/ faz int(pk) internamente.
+        siga_guardian_id = guardian_context.get("siga_guardian_id")
+
+        if siga_guardian_id:
+            try:
+                invoices_result = await get_invoices.ainvoke({
+                    "siga_guardian_id": siga_guardian_id,
+                    "sa_token": state["sa_token"],
+                })
+                tool_results.append(f"Boletos: {invoices_result}")
+            except Exception as e:
+                logger.warning("financial_invoices_error", error=str(e))
+                tool_results.append("Boletos: erro ao consultar — tente novamente em instantes")
+        else:
+            tool_results.append("Boletos: siga_guardian_id não disponível para este responsável.")
 
     history_text = "\n".join(
         f"{m['role'].upper()}: {m['content']}"

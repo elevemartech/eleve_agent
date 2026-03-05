@@ -13,7 +13,7 @@ SITUACAO_MAP = {
 
 @tool
 async def get_invoices(
-    guardian_id: str,
+    siga_guardian_id: str,
     sa_token: str,
     situacao: str = "ABE",
     **kwargs,
@@ -21,11 +21,19 @@ async def get_invoices(
     """
     Retorna boletos do responsável. situacao: ABE (aberto) | LIQ (pago) | CAN (cancelado).
     Padrão: apenas boletos em aberto.
+    Requer siga_guardian_id — ID inteiro do responsável no SIGA (não o UUID interno).
     """
+    # CORREÇÃO: o parâmetro era `guardian_id` (UUID do model people.Guardian),
+    # mas o endpoint GET /api/v1/contacts/guardians/{id}/invoices/ faz int(pk)
+    # internamente — UUID causa ValueError 400. O campo correto é siga_guardian_id,
+    # disponível no guardian_context desde a correção de get_guardian_by_phone.
+    if not siga_guardian_id:
+        return "Não foi possível consultar os boletos: siga_guardian_id não informado."
+
     client = DjangoAPIClient(token=sa_token)
     try:
         result = await client.get(
-            f"/api/v1/contacts/guardians/{guardian_id}/invoices/",
+            f"/api/v1/contacts/guardians/{siga_guardian_id}/invoices/",
             params={"situacao": situacao},
         )
 
